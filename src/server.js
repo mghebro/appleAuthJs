@@ -1,48 +1,69 @@
 // Import necessary modules
 const express = require("express");
 const path = require("path");
-const fs = require("fs"); // For reading the private key file
-const AppleAuth = require("./apple-auth"); // Your provided apple-auth.js
-const jwt = require("jsonwebtoken"); // For decoding the ID token
-const qs = require("querystring"); // Already used in apple-auth.js, but good to have for clarity
+const fs = require("fs");
+const AppleAuth = require("./apple-auth");
+const jwt = require("jsonwebtoken");
+const qs = require("querystring");
 
 const app = express();
-// The port is no longer directly used by app.listen() but can be kept for local testing if desired.
 const port = process.env.PORT || 3000;
 
-// --- Simple In-Memory User Store (for demonstration purposes) ---
-// In a real application, you would use a database (e.g., MongoDB, PostgreSQL, Firebase Firestore).
 const users = {};
 
-// Middleware to parse URL-encoded bodies (for form submissions)
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json()); // To parse JSON bodies if needed
+app.use(express.json());
 
-// --- Apple Auth Configuration ---
-// IMPORTANT: These values should be set as environment variables on your Netlify site.
-// DO NOT hardcode sensitive credentials in production code.
 const config = {
-  client_id: process.env.APPLE_CLIENT_ID || "com.mghebro.si", // Your Services ID (e.g., com.yourcompany.yourapp.service)
-  team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ", // Your 10-character Team ID
-  // This redirect_uri MUST match what you configure in Apple Developer Portal and your hosted domain
-  redirect_uri:
-    process.env.APPLE_REDIRECT_URI ||
-    "https://mghebro-auth-test.netlify.app/auth/apple/callback",
-  key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT", // Your 10-character Key ID for the Sign in with Apple private key
-  scope: "name email", // The scope of information you want to request
+  client_id: process.env.APPLE_CLIENT_ID || "com.mghebro.si",
+  team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ",
+  redirect_uri: process.env.APPLE_REDIRECT_URI || "https://mghebro-auth-test.netlify.app/auth/apple/callback",
+  key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT",
+  scope: "name email",
 };
 
-// Private key handling - Fixed logic
+// Private key handling with multiple fallback methods
 let privateKeyContent;
 let privateKeyMethod;
 
 if (process.env.APPLE_PRIVATE_KEY) {
-  // Use environment variable (recommended for production)
-  privateKeyContent = process.env.APPLE_PRIVATE_KEY;
+  let rawKey = process.env.APPLE_PRIVATE_KEY;
+  
+  // Try multiple methods to get the correct private key format
+  if (rawKey.includes('\\n')) {
+    // Method 1: Replace escaped newlines
+    privateKeyContent = rawKey.replace(/\\n/g, '\n');
+    console.log("🔧 Method 1: Converted \\n to newlines");
+  } else if (!rawKey.includes('\n') && rawKey.length > 200) {
+    // Method 2: Assume it's base64 encoded
+    try {
+      privateKeyContent = Buffer.from(rawKey, 'base64').toString('utf8');
+      console.log("🔧 Method 2: Decoded from base64");
+    } catch (err) {
+      console.log("🔧 Method 2 failed, trying method 3");
+      privateKeyContent = rawKey;
+    }
+  } else {
+    // Method 3: Use as-is
+    privateKeyContent = rawKey;
+    console.log("🔧 Method 3: Using key as-is");
+  }
+  
   privateKeyMethod = "text";
+  
+  // DEBUG: Check private key format
+  console.log("🔍 Private Key Debug Info:");
+  console.log("Original length:", rawKey.length);
+  console.log("Processed length:", privateKeyContent.length);
+  console.log("Starts with:", privateKeyContent.substring(0, 30));
+  console.log("Ends with:", privateKeyContent.substring(privateKeyContent.length - 30));
+  console.log("Contains BEGIN:", privateKeyContent.includes("-----BEGIN"));
+  console.log("Contains END:", privateKeyContent.includes("-----END"));
+  console.log("Newline count:", (privateKeyContent.match(/\n/g) || []).length);
+  console.log("Raw newline count:", (rawKey.match(/\n/g) || []).length);
+  
   console.log("✅ Using private key from environment variable");
 } else {
-  // Fallback to file (for local development)
   const privateKeyLocation = path.join(__dirname, "AuthKey_ZR62KJ2BYT.p8");
   console.log("🔍 Looking for private key at:", privateKeyLocation);
   
@@ -57,19 +78,17 @@ if (process.env.APPLE_PRIVATE_KEY) {
   console.log("✅ Using private key from file");
 }
 
-// Initialize AppleAuth with the correct variables
+// Initialize AppleAuth
 const appleAuth = new AppleAuth(
     config,
-    privateKeyContent,    // ← Fixed: Use the correct variable
-    privateKeyMethod,     // ← Fixed: Use the correct method
+    privateKeyContent,
+    privateKeyMethod,
     { debug: true }
 );
 
 console.log("🍎 Apple Auth initialized successfully");
 
-// --- Routes ---
-
-// Home route - serves the login page
+// Routes
 app.get("/", (req, res) => {
   res.send(`
         <!DOCTYPE html>
@@ -103,12 +122,11 @@ app.get("/", (req, res) => {
             </div>
 
             <script>
-                // This script handles displaying the response if redirected back with data
                 const urlParams = new URLSearchParams(window.location.search);
                 const code = urlParams.get('code');
                 const id_token = urlParams.get('id_token');
                 const state = urlParams.get('state');
-                const user = urlParams.get('user'); // This might contain user name/email if Apple sends it
+                const user = urlParams.get('user');
 
                 const responseMessageDiv = document.getElementById('response-message');
                 const responseDataPre = document.getElementById('response-data');
@@ -119,7 +137,7 @@ app.get("/", (req, res) => {
                     if (code) responseText += '\\nCode: ' + code;
                     if (id_token) responseText += '\\nID Token (decoded on server): See server logs';
                     if (state) responseText += '\\nState: ' + state;
-                    if (user) responseText += '\\nUser (initial name/email): ' + user; // Note: User data is usually in ID Token
+                    if (user) responseText += '\\nUser (initial name/email): ' + user;
 
                     responseDataPre.textContent = responseText;
                 }
@@ -129,31 +147,26 @@ app.get("/", (req, res) => {
     `);
 });
 
-// Apple Auth Callback route
 app.post("/auth/apple/callback", async (req, res) => {
   try {
-    // Apple sends data as form-urlencoded POST request
     const { code, id_token, state, user } = req.body;
 
     console.log("--- Apple Callback Received ---");
     console.log("Code:", code);
     console.log("ID Token (raw):", id_token);
     console.log("State:", state);
-    console.log("User (initial data from Apple, if provided):", user); // This 'user' parameter is only sent on first login
+    console.log("User (initial data from Apple, if provided):", user);
 
-    // Verify the state parameter to prevent CSRF attacks
     if (state !== appleAuth.state) {
       console.error("CSRF Attack Detected: State mismatch!");
       return res.status(403).send("State mismatch. Possible CSRF attack.");
     }
 
-    // Exchange the authorization code for an access token
     const tokenResponse = await appleAuth.accessToken(code);
 
     console.log("\n--- Apple Token Response ---");
     console.log(tokenResponse);
 
-    // --- Backend Logic: Decode ID Token and User Management ---
     let decodedIdToken = null;
     let userEmail = "N/A";
     let userName = "N/A";
@@ -161,53 +174,42 @@ app.post("/auth/apple/callback", async (req, res) => {
 
     if (tokenResponse.id_token) {
       try {
-        // Decode the ID token.
-        // IMPORTANT: In a production environment, you MUST verify the signature
-        // of the ID token using Apple's public keys (JWKS endpoint).
-        // For simplicity, this example only decodes the payload.
         decodedIdToken = jwt.decode(tokenResponse.id_token);
         console.log("\n--- Decoded ID Token Payload ---");
         console.log(decodedIdToken);
 
-        userAppleId = decodedIdToken.sub; // 'sub' is the unique identifier for the user from Apple
+        userAppleId = decodedIdToken.sub;
         userEmail = decodedIdToken.email || "N/A";
-        // The 'name' claim is often not directly in the ID token unless requested and provided by Apple.
-        // The 'user' parameter in the initial callback (req.body.user) might contain name on first login.
+        
         if (user && typeof user === "string") {
           try {
             const parsedUser = JSON.parse(user);
             userName = parsedUser.name
-              ? `${parsedUser.name.firstName || ""} ${
-                  parsedUser.name.lastName || ""
-                }`.trim()
+              ? `${parsedUser.name.firstName || ""} ${parsedUser.name.lastName || ""}`.trim()
               : "N/A";
           } catch (parseError) {
             console.warn("Could not parse user string:", parseError);
           }
         }
 
-        // --- Simulate User Database Operations ---
         if (userAppleId) {
           if (users[userAppleId]) {
-            // User exists, update their session/refresh token
             console.log(`\nUser ${userAppleId} already exists. Updating data.`);
             users[userAppleId].lastLogin = new Date();
-            users[userAppleId].refreshToken = tokenResponse.refresh_token; // Store refresh token
-            users[userAppleId].accessToken = tokenResponse.access_token; // Store access token
-            // Update name/email if they are new or changed (e.g., from first login 'user' param)
+            users[userAppleId].refreshToken = tokenResponse.refresh_token;
+            users[userAppleId].accessToken = tokenResponse.access_token;
             if (userName !== "N/A" && !users[userAppleId].name)
               users[userAppleId].name = userName;
             if (userEmail !== "N/A" && !users[userAppleId].email)
               users[userAppleId].email = userEmail;
           } else {
-            // New user, create a record
             console.log(`\nNew user ${userAppleId}. Creating record.`);
             users[userAppleId] = {
               appleId: userAppleId,
               email: userEmail,
               name: userName,
-              refreshToken: tokenResponse.refresh_token, // Store refresh token
-              accessToken: tokenResponse.access_token, // Store access token
+              refreshToken: tokenResponse.refresh_token,
+              accessToken: tokenResponse.access_token,
               createdAt: new Date(),
               lastLogin: new Date(),
             };
@@ -218,11 +220,7 @@ app.post("/auth/apple/callback", async (req, res) => {
         console.error("Error decoding ID token:", jwtError);
       }
     }
-    // --- End Backend Logic ---
 
-    // For demonstration, we'll send a success message.
-    // In a real application, you would create a user session,
-    // redirect to a dashboard, etc.
     res.send(`
             <!DOCTYPE html>
             <html lang="en">
@@ -249,18 +247,8 @@ app.post("/auth/apple/callback", async (req, res) => {
                     <div class="bg-gray-100 p-4 rounded-md text-left mb-6">
                         <h3 class="font-semibold text-lg mb-2">Token Response Summary:</h3>
                         <pre class="whitespace-pre-wrap break-words text-sm">
-                            Access Token: ${
-                              tokenResponse.access_token
-                                ? tokenResponse.access_token.substring(0, 20) +
-                                  "..."
-                                : "N/A"
-                            }
-                            ID Token: ${
-                              tokenResponse.id_token
-                                ? tokenResponse.id_token.substring(0, 20) +
-                                  "..."
-                                : "N/A"
-                            }
+                            Access Token: ${tokenResponse.access_token ? tokenResponse.access_token.substring(0, 20) + "..." : "N/A"}
+                            ID Token: ${tokenResponse.id_token ? tokenResponse.id_token.substring(0, 20) + "..." : "N/A"}
                             Expires In: ${tokenResponse.expires_in} seconds
                             Token Type: ${tokenResponse.token_type}
                         </pre>
@@ -304,9 +292,7 @@ app.post("/auth/apple/callback", async (req, res) => {
                     <p class="text-gray-700 mb-6">
                         An error occurred during Apple authentication. Please check the server logs for details.
                     </p>
-                    <p class="text-red-500 text-sm mb-6">${
-                      error.message || error
-                    }</p>
+                    <p class="text-red-500 text-sm mb-6">${error.message || error}</p>
                     <a href="/" class="inline-block bg-blue-600 text-white py-2 px-5 rounded-full text-md font-semibold hover:bg-blue-700 transition duration-300 shadow-md">
                         Try Again
                     </a>
@@ -317,6 +303,4 @@ app.post("/auth/apple/callback", async (req, res) => {
   }
 });
 
-// The app.listen() call is removed for Netlify Functions.
-// module.exports is used to export the Express app for the Netlify Function handler.
 module.exports = app;
