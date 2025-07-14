@@ -1,34 +1,20 @@
 {
-  "name": "apple-auth",
-  "version": "1.0.10",
-  "description": "Sign in with Apple for NodeJS",
-  "main": "src/apple-auth.js",
-  "types": "src/apple-auth.d.ts",
+  "name": "apple-auth-example",
+  "version": "1.0.0",
+  "description": "An example application using the apple-auth library",
+  "main": "server.js",
   "scripts": {
-    "dev": "nodemon src/apple-auth.js",
-    "start": "node src/apple-auth.js"
+    "start": "node server.js",
+    "build": "echo 'No dedicated build step for Netlify functions, npm install is sufficient'"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ananay/apple-auth.git"
-  },
-  "keywords": [
-    "apple",
-    "sign",
-    "in",
-    "sso",
-    "auth",
-    "authentication"
-  ],
-  "author": "Ananay Arora <i@ananayarora.com> (https://ananayarora.com)",
-  "license": "MIT",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "axios": "^1.6.0",
-    "express": "^4.17.1",
-    "jsonwebtoken": "^9.0.0"
-  },
-  "bugs": {
-    "url": "https://github.com/ananay/apple-auth/issues"
-  },
-  "homepage": "https://github.com/ananay/apple-auth#readme"
+    "axios": "^1.7.2",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "querystring": "^0.2.1",
+    "serverless-http": "^3.2.0"
+  }
 }
