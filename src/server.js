@@ -36,7 +36,7 @@ const config = {
 // Private key location:
 // On Netlify, you'll need to ensure this .p8 file is deployed with your functions.
 // Alternatively, you could read the private key content from an environment variable (base64 encoded).
-const privateKeyLocation = process.env.APPLE_PRIVATE_KEY_PATH || path.join(__dirname, "AuthKey_ZR62KJ2BYT.p8"); // Replace YOURKEYID with your actual Key ID
+const privateKeyLocation = process.env.APPLE_PRIVATE_KEY_PATH || path.join(__dirname, "../AuthKey_ZR62KJ2BYT.p8"); // Replace YOURKEYID with your actual Key ID
 
 // Check if the private key file exists
 if (!fs.existsSync(privateKeyLocation)) {
