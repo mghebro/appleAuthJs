@@ -18,9 +18,6 @@ const users = {};
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json()); // To parse JSON bodies if needed
 
-// Serve static files (like your index.html if you put it in a 'public' folder)
-// For this example, we'll serve index.html directly from a route.
-
 // --- Apple Auth Configuration ---
 // IMPORTANT: These values should be set as environment variables on your Netlify site.
 // DO NOT hardcode sensitive credentials in production code.
@@ -35,13 +32,7 @@ const config = {
   scope: "name email", // The scope of information you want to request
 };
 
-// Private key location:
-// On Netlify, you'll need to ensure this .p8 file is deployed with your functions.
-// Alternatively, you could read the private key content from an environment variable (base64 encoded).
-const privateKeyLocation =
-  process.env.APPLE_PRIVATE_KEY_PATH ||
-  path.join(__dirname, "AuthKey_ZR62KJ2BYT.p8");
-
+// Private key handling - Fixed logic
 let privateKeyContent;
 let privateKeyMethod;
 
@@ -49,24 +40,33 @@ if (process.env.APPLE_PRIVATE_KEY) {
   // Use environment variable (recommended for production)
   privateKeyContent = process.env.APPLE_PRIVATE_KEY;
   privateKeyMethod = "text";
+  console.log("✅ Using private key from environment variable");
 } else {
   // Fallback to file (for local development)
   const privateKeyLocation = path.join(__dirname, "AuthKey_ZR62KJ2BYT.p8");
+  console.log("🔍 Looking for private key at:", privateKeyLocation);
+  
   if (!fs.existsSync(privateKeyLocation)) {
-    console.error(`Error: Private key file not found at ${privateKeyLocation}`);
-    throw new Error("Apple private key file not found.");
+    console.error(`❌ Error: Private key file not found at ${privateKeyLocation}`);
+    console.error("💡 Tip: Set APPLE_PRIVATE_KEY environment variable instead");
+    throw new Error("Apple private key not found in environment variable or file");
   }
+  
   privateKeyContent = privateKeyLocation;
   privateKeyMethod = "file";
+  console.log("✅ Using private key from file");
 }
 
-// Initialize AppleAuth
+// Initialize AppleAuth with the correct variables
 const appleAuth = new AppleAuth(
     config,
-    privateKeyLocation,
-    "file", // Use file method
+    privateKeyContent,    // ← Fixed: Use the correct variable
+    privateKeyMethod,     // ← Fixed: Use the correct method
     { debug: true }
 );
+
+console.log("🍎 Apple Auth initialized successfully");
+
 // --- Routes ---
 
 // Home route - serves the login page
@@ -316,6 +316,7 @@ app.post("/auth/apple/callback", async (req, res) => {
         `);
   }
 });
+
 // The app.listen() call is removed for Netlify Functions.
 // module.exports is used to export the Express app for the Netlify Function handler.
 module.exports = app;

@@ -14,12 +14,12 @@ class AppleAuth {
     /**
      * Configure the parameters of the Apple Auth class
      * @param {object} config - Configuration options
-     * @param {string} config.client_id – Client ID (also known as the Services ID
+     * @param {string} config.client_id – Client ID (also known as the Services ID
      *  in Apple's Developer Portal). Example: com.ananayarora.app
-     * @param {string} config.team_id – Team ID for the Apple Developer Account
+     * @param {string} config.team_id – Team ID for the Apple Developer Account
      *  found on top right corner of the developers page
-     * @param {string} config.redirect_uri – The OAuth Redirect URI
-     * @param {string} config.key_id – The identifier for the private key on the Apple
+     * @param {string} config.redirect_uri – The OAuth Redirect URI
+     * @param {string} config.key_id – The identifier for the private key on the Apple
      * @param {string} config.scope - the scope of information you want to get from the user (user name and email)
      *  Developer Account page
      * @param {string} privateKeyLocation - Private Key Location / the key itself
@@ -54,7 +54,7 @@ class AppleAuth {
 
     /**
      * Return the state for the OAuth 2 process
-     * @returns {string} state – The state bytes in hex format
+     * @returns {string} state – The state bytes in hex format
      */
 
     get state() {
@@ -63,7 +63,7 @@ class AppleAuth {
 
     /**
      * Generates the Login URL
-     * @returns {string} url – The Login URL
+     * @returns {string} url – The Login URL
      */
 
     loginURL() {
@@ -108,11 +108,11 @@ class AppleAuth {
                             console.error(error);
                             reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + error + " - " + error?.response?.data?.error_description);
                         }
-                        // If customConfig.debug isn't set, output in this format.                       
+                        // Fixed: Use 'error' instead of 'response'                      
                         const responseData = error.response?.data
                         reject(
                             `AppleAuth Error - An error occurred while getting response from Apple's servers: 
-                            ${response}${responseData ? (" | " + responseData) : ""}`
+                            ${error}${responseData ? (" | " + responseData) : ""}`
                         );
                     });
                 }).catch((err) => {
@@ -147,12 +147,12 @@ class AppleAuth {
                         url: 'https://appleid.apple.com/auth/token'
                     }).then((response) => {
                         resolve(response.data);
-                    }).catch((err) => {
+                    }).catch((error) => {
                         if(this._customConfig?.debug) {
-                            console.error(response);
-                            reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + err + " - " + err?.response?.data?.error_description);
+                            console.error(error);
+                            reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + error + " - " + error?.response?.data?.error_description);
                         }
-                        reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + err);
+                        reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + error);
                     });
                 }).catch((err) => {
                     reject(err);
@@ -160,6 +160,7 @@ class AppleAuth {
             }
         );
     }
+    
     revokeToken(unique_id) {
         return new Promise(
             (resolve, reject) => {
@@ -178,12 +179,12 @@ class AppleAuth {
                         url: 'https://appleid.apple.com/auth/revoke'
                     }).then((response) => {
                         resolve(response.data);
-                    }).catch((err) => {
+                    }).catch((error) => {
                         if(this._customConfig?.debug) {
-                            console.error(response);
-                            reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + err + " - " + err?.response?.data?.error_description);
+                            console.error(error);
+                            reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + error + " - " + error?.response?.data?.error_description);
                         }
-                        reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + err);
+                        reject("AppleAuth Error - An error occurred while getting response from Apple's servers: " + error);
                     });
                 }).catch((err) => {
                     reject(err);
