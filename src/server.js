@@ -28,7 +28,7 @@ const config = {
     client_id: process.env.APPLE_CLIENT_ID || "com.mghebro.si", // Your Services ID (e.g., com.yourcompany.yourapp.service)
     team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ", // Your 10-character Team ID
     // This redirect_uri MUST match what you configure in Apple Developer Portal and your hosted domain
-    redirect_uri: process.env.APPLE_REDIRECT_URI || "https:/mghebro-auth-test.netlify.app/auth/apple/callback",
+    redirect_uri: process.env.APPLE_REDIRECT_URI || "https://mghebro-auth-test.netlify.app/auth/apple/callback",
     key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT", // Your 10-character Key ID for the Sign in with Apple private key
     scope: "name email", // The scope of information you want to request
 };
