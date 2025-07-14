@@ -51,24 +51,22 @@ if (process.env.APPLE_PRIVATE_KEY) {
   privateKeyMethod = "text";
 } else {
   // Fallback to file (for local development)
-  const privateKeyLocation = path.join(
-    __dirname,
-    "config",
-    "AuthKey_ZR62KJ2BYT.p8"
-  );
+  const privateKeyLocation = path.join(__dirname, "AuthKey_ZR62KJ2BYT.p8");
   if (!fs.existsSync(privateKeyLocation)) {
-    throw new Error(
-      "Apple private key not found in environment variable or file"
-    );
+    console.error(`Error: Private key file not found at ${privateKeyLocation}`);
+    throw new Error("Apple private key file not found.");
   }
   privateKeyContent = privateKeyLocation;
   privateKeyMethod = "file";
 }
 
 // Initialize AppleAuth
-const appleAuth = new AppleAuth(config, privateKeyContent, privateKeyMethod, {
-  debug: true,
-});
+const appleAuth = new AppleAuth(
+    config,
+    privateKeyLocation,
+    "file", // Use file method
+    { debug: true }
+);
 // --- Routes ---
 
 // Home route - serves the login page
