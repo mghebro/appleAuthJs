@@ -1,30 +1,19 @@
-# netlify.toml
 [build]
-  # The command Netlify runs to build your project.
-  # For Node.js functions, 'npm install' is usually sufficient.
   command = "npm install" 
-  # The directory that contains the deploy-ready HTML files and assets.
-  # Since your Express app serves the HTML, we point to the root.
   publish = "/" 
 
 [functions]
-  # The directory where your Netlify Functions are located.
   directory = "netlify/functions"
-  # Recommended bundler for Node.js functions for faster builds.
   node_bundler = "esbuild"
-
-# Redirects for your Express routes to be handled by the function
-# This tells Netlify to forward all requests to the root path and
-# the /auth/apple/callback path to your serverless function.
-# The '!' means it's a forced redirect, ensuring the function is hit.
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/server/:splat"
-  status = 200
-  force = true # Ensures the function is always hit
 
 [[redirects]]
   from = "/auth/apple/callback"
   to = "/.netlify/functions/server/auth/apple/callback"
   status = 200
-  force = true # Ensures the function is always hit
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server/:splat"
+  status = 200
+  force = false

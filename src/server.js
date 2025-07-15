@@ -5,7 +5,7 @@ const fs = require("fs");
 const AppleAuth = require("./apple-auth");
 const jwt = require("jsonwebtoken");
 const qs = require("querystring");
-const axios = require("axios"); // Import axios for making HTTP requests to C# backend
+const axios = require("axios");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -16,27 +16,22 @@ app.use(express.json());
 const config = {
   client_id: process.env.APPLE_CLIENT_ID || "com.mghebro.si",
   team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ",
-  redirect_uri:
-    process.env.APPLE_REDIRECT_URI ||
-    "https://mghebro-auth-test.netlify.app/api/AppleService/auth/apple-callback",
+  redirect_uri: "https://mghebro-auth-test.netlify.app/auth/apple/callback", // Fixed
   key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT",
   scope: "name email",
 };
 
-// Private key handling with multiple fallback methods
+// Private key handling
 let privateKeyContent;
 let privateKeyMethod;
 
 if (process.env.APPLE_PRIVATE_KEY) {
   let rawKey = process.env.APPLE_PRIVATE_KEY;
 
-  // Try multiple methods to get the correct private key format
   if (rawKey.includes("\\n")) {
-    // Method 1: Replace escaped newlines
     privateKeyContent = rawKey.replace(/\\n/g, "\n");
     console.log("🔧 Method 1: Converted \\n to newlines");
   } else if (!rawKey.includes("\n") && rawKey.length > 200) {
-    // Method 2: Assume it's base64 encoded
     try {
       privateKeyContent = Buffer.from(rawKey, "base64").toString("utf8");
       console.log("🔧 Method 2: Decoded from base64");
@@ -45,40 +40,19 @@ if (process.env.APPLE_PRIVATE_KEY) {
       privateKeyContent = rawKey;
     }
   } else {
-    // Method 3: Use as-is
     privateKeyContent = rawKey;
     console.log("🔧 Method 3: Using key as-is");
   }
 
   privateKeyMethod = "text";
-
-  // DEBUG: Check private key format
-  console.log("🔍 Private Key Debug Info:");
-  console.log("Original length:", rawKey.length);
-  console.log("Processed length:", privateKeyContent.length);
-  console.log("Starts with:", privateKeyContent.substring(0, 30));
-  console.log(
-    "Ends with:",
-    privateKeyContent.substring(privateKeyContent.length - 30)
-  );
-  console.log("Contains BEGIN:", privateKeyContent.includes("-----BEGIN"));
-  console.log("Contains END:", privateKeyContent.includes("-----END"));
-  console.log("Newline count:", (privateKeyContent.match(/\n/g) || []).length);
-  console.log("Raw newline count:", (rawKey.match(/\n/g) || []).length);
-
   console.log("✅ Using private key from environment variable");
 } else {
   const privateKeyLocation = path.join(__dirname, "AuthKey_ZR62KJ2BYT.p8");
   console.log("🔍 Looking for private key at:", privateKeyLocation);
 
   if (!fs.existsSync(privateKeyLocation)) {
-    console.error(
-      `❌ Error: Private key file not found at ${privateKeyLocation}`
-    );
-    console.error("💡 Tip: Set APPLE_PRIVATE_KEY environment variable instead");
-    throw new Error(
-      "Apple private key not found in environment variable or file"
-    );
+    console.error(`❌ Error: Private key file not found at ${privateKeyLocation}`);
+    throw new Error("Apple private key not found in environment variable or file");
   }
 
   privateKeyContent = privateKeyLocation;
@@ -93,79 +67,48 @@ const appleAuth = new AppleAuth(config, privateKeyContent, privateKeyMethod, {
 
 console.log("🍎 Apple Auth initialized successfully");
 
-// --- C# Backend API Endpoint ---
-// IMPORTANT: This is the URL where your C# backend will be listening for the forwarded data.
-// Make sure this matches your C# controller's route.
-const CSHARP_BACKEND_API_URL =
-  "https://4709379df349.ngrok-free.app/api/AppleService/auth/apple-callback"; // Corrected example URL
-// --- End C# Backend API Endpoint ---
+// C# Backend API URL
+const CSHARP_BACKEND_API_URL = process.env.CSHARP_BACKEND_URL || "https://4709379df349.ngrok-free.app/api/AppleService/auth/apple-callback";
 
 // Routes
 app.get("/", (req, res) => {
   res.send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Sign in with Apple Example</title>
-            <script src="https://cdn.tailwindcss.com"></script>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-            <style>
-                body {
-                    font-family: 'Inter', sans-serif;
-                    background-color: #f0f2f5;
-                }
-            </style>
-        </head>
-        <body class="flex items-center justify-center min-h-screen">
-            <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
-                <h1 class="text-3xl font-bold text-gray-800 mb-6">Sign in with Apple</h1>
-                <p class="text-gray-600 mb-8">
-                    Click the button below to authenticate using your Apple ID.
-                </p>
-                <a href="${appleAuth.loginURL()}" class="inline-block bg-black text-white py-3 px-6 rounded-full text-lg font-semibold hover:bg-gray-800 transition duration-300 shadow-md">
-                    Sign in with Apple
-                </a>
-                <div id="response-message" class="mt-8 p-4 bg-gray-100 rounded-md text-gray-700 text-left hidden">
-                    <h3 class="font-semibold text-lg mb-2">Authentication Response:</h3>
-                    <pre id="response-data" class="whitespace-pre-wrap break-words text-sm"></pre>
-                </div>
-            </div>
-
-            <script>
-                const urlParams = new URLSearchParams(window.location.search);
-                const code = urlParams.get('code');
-                const id_token = urlParams.get('id_token');
-                const state = urlParams.get('state');
-                const user = urlParams.get('user');
-
-                const responseMessageDiv = document.getElementById('response-message');
-                const responseDataPre = document.getElementById('response-data');
-
-                if (code || id_token || state || user) {
-                    responseMessageDiv.classList.remove('hidden');
-                    var responseText = 'No direct parameters found in URL. Check server logs for full token response.';
-                    if (code) responseText += '\\nCode: ' + code;
-                    if (id_token) responseText += '\\nID Token (decoded on server): See server logs';
-                    if (state) responseText += '\\nState: ' + state;
-                    if (user) responseText += '\\nUser (initial name/email): ' + user;
-
-                    responseDataPre.textContent = responseText;
-                }
-            </script>
-        </body>
-        </html>
-    `);
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sign in with Apple Example</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body {
+                font-family: 'Inter', sans-serif;
+                background-color: #f0f2f5;
+            }
+        </style>
+    </head>
+    <body class="flex items-center justify-center min-h-screen">
+        <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">Sign in with Apple</h1>
+            <p class="text-gray-600 mb-8">
+                Click the button below to authenticate using your Apple ID.
+            </p>
+            <a href="${appleAuth.loginURL()}" class="inline-block bg-black text-white py-3 px-6 rounded-full text-lg font-semibold hover:bg-gray-800 transition duration-300 shadow-md">
+                Sign in with Apple
+            </a>
+        </div>
+    </body>
+    </html>
+  `);
 });
 
-// CORRECTED ROUTE DEFINITION: This route handles the callback from Apple
-app.post("https://5024c2ceda71.ngrok-free.app/api/AppleService/auth/apple-callback", async (req, res) => {
+// FIXED: Correct route path for Apple callback
+app.post("/auth/apple/callback", async (req, res) => {
   let userAppleId = null;
   let userEmail = null;
   let userName = null;
   let isPrivateEmail = false;
-  let csharpBackendResponse = null;
 
   try {
     const { code, id_token, state, user } = req.body;
@@ -235,33 +178,38 @@ app.post("https://5024c2ceda71.ngrok-free.app/api/AppleService/auth/apple-callba
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json'
-            }
+            },
+            timeout: 10000 // 10 second timeout
           });
           
-          csharpBackendResponse = csharpResponse.data;
-          console.log("✅ C# Backend Response:", csharpBackendResponse);
+          console.log("✅ C# Backend Response:", csharpResponse.data);
 
-          // If C# backend returns success with JWT token, redirect to frontend
-          if (csharpBackendResponse.status === 200 && csharpBackendResponse.data) {
+          // If C# backend returns success with JWT token, redirect to success page
+          if (csharpResponse.data.status === 200 && csharpResponse.data.data) {
             const frontendUrl = process.env.FRONTEND_URL || 'https://mghebro-auth-test.netlify.app';
-            const successUrl = `${frontendUrl}/auth/success?token=${csharpBackendResponse.data.accessToken}&email=${encodeURIComponent(csharpBackendResponse.data.email || '')}`;
+            const successUrl = `${frontendUrl}/success.html?token=${csharpResponse.data.data.accessToken}&email=${encodeURIComponent(csharpResponse.data.data.email || '')}`;
             return res.redirect(successUrl);
+          } else {
+            throw new Error(`C# Backend returned error: ${csharpResponse.data.message || 'Unknown error'}`);
           }
           
         } catch (csharpError) {
           console.error("❌ Error sending data to C# backend:", csharpError.response ? csharpError.response.data : csharpError.message);
-          // Return error page
-          return res.status(500).send(generateErrorHTML("Failed to complete authentication", csharpError.message));
+          
+          // Return error page instead of success
+          return res.status(500).send(generateErrorHTML(
+            "Backend Authentication Failed", 
+            `Failed to complete authentication with backend: ${csharpError.message}`
+          ));
         }
 
       } catch (jwtError) {
         console.error("Error decoding ID token:", jwtError);
         return res.status(500).send(generateErrorHTML("Token decode error", jwtError.message));
       }
+    } else {
+      throw new Error("No ID token received from Apple");
     }
-
-    // Success page (fallback if not redirecting)
-    res.send(generateSuccessHTML(tokenResponse, userAppleId, userEmail, userName, isPrivateEmail, csharpBackendResponse));
 
   } catch (error) {
     console.error("Error during Apple authentication callback:", error);
@@ -269,42 +217,19 @@ app.post("https://5024c2ceda71.ngrok-free.app/api/AppleService/auth/apple-callba
   }
 });
 
+// Add a test endpoint to verify the server is working
+app.get("/test", (req, res) => {
+  res.json({ 
+    message: "Server is working", 
+    timestamp: new Date().toISOString(),
+    config: {
+      client_id: config.client_id,
+      redirect_uri: config.redirect_uri
+    }
+  });
+});
+
 // Helper functions for generating HTML responses
-function generateSuccessHTML(tokenResponse, userAppleId, userEmail, userName, isPrivateEmail, csharpResponse) {
-  const displayEmail = userEmail || "Not provided";
-  const displayName = userName || "Not provided (only available on first sign-in)";
-  const emailType = isPrivateEmail ? " (Private Relay)" : "";
-
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Apple Auth Success</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body class="flex items-center justify-center min-h-screen bg-gray-100">
-        <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
-            <h1 class="text-3xl font-bold text-green-600 mb-4">Authentication Successful!</h1>
-            <div class="bg-blue-50 p-4 rounded-md text-left mb-6">
-                <p><strong>Apple ID:</strong> ${userAppleId || "Not available"}</p>
-                <p><strong>Email:</strong> ${displayEmail}${emailType}</p>
-                <p><strong>Name:</strong> ${displayName}</p>
-            </div>
-            ${csharpResponse ? `
-            <div class="bg-purple-50 p-4 rounded-md text-left mb-6">
-                <h3 class="font-semibold">Backend Response:</h3>
-                <pre class="text-sm">${JSON.stringify(csharpResponse, null, 2)}</pre>
-            </div>
-            ` : ''}
-            <a href="/" class="bg-blue-600 text-white py-2 px-4 rounded">Home</a>
-        </div>
-    </body>
-    </html>
-  `;
-}
-
 function generateErrorHTML(title, message) {
   return `
     <!DOCTYPE html>
