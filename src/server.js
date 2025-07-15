@@ -68,7 +68,7 @@ const appleAuth = new AppleAuth(config, privateKeyContent, privateKeyMethod, {
 console.log("🍎 Apple Auth initialized successfully");
 
 // C# Backend API URL
-const CSHARP_BACKEND_API_URL = process.env.CSHARP_BACKEND_URL || "https://4709379df349.ngrok-free.app/api/AppleService/auth/apple-callback";
+const CSHARP_BACKEND_API_URL = process.env.CSHARP_BACKEND_URL || "https://a04475a19c36.ngrok-free.app/api/AppleService/auth/apple-callback";
 
 // Routes
 app.get("/", (req, res) => {
