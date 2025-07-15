@@ -16,7 +16,7 @@ app.use(express.json());
 const config = {
   client_id: process.env.APPLE_CLIENT_ID || "com.mghebro.si",
   team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ",
-  redirect_uri: process.env.APPLE_REDIRECT_URI || "https://mghebro-auth-test.netlify.app/auth/apple/callback",
+  redirect_uri: process.env.APPLE_REDIRECT_URI || "https://mghebro-auth-test.netlify.app/auth/apple-callback",
   key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT",
   scope: "name email",
 };
@@ -88,8 +88,9 @@ const appleAuth = new AppleAuth(
 console.log("🍎 Apple Auth initialized successfully");
 
 // --- C# Backend API Endpoint ---
-// IMPORTANT: Replace with the actual URL of your C# backend API
-const CSHARP_BACKEND_API_URL = "https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callback"; // Example URL
+// IMPORTANT: This is the URL where your C# backend will be listening for the forwarded data.
+// Make sure this matches your C# controller's route.
+const CSHARP_BACKEND_API_URL = "https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callback"; // Corrected example URL
 // --- End C# Backend API Endpoint ---
 
 // Routes
@@ -151,8 +152,9 @@ app.get("/", (req, res) => {
     `);
 });
 
-app.post("https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callback", async (req, res) => {
-  let userAppleId = null; // Declare outside try-catch for broader scope
+// CORRECTED ROUTE DEFINITION: This route handles the callback from Apple
+app.post("/auth/apple/callback", async (req, res) => {
+  let userAppleId = null;
   let userEmail = null;
   let userName = null;
   let isPrivateEmail = false;
@@ -163,7 +165,7 @@ app.post("https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callba
 
     console.log("--- Apple Callback Received ---");
     console.log("Code:", code);
-    console.log("ID Token (raw):", id_token);
+    console.log("ID Token (raw):", id_token); // This is the raw ID token from Apple's form_post
     console.log("State:", state);
     console.log("User (initial data from Apple, if provided):", user);
 
@@ -172,18 +174,20 @@ app.post("https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callba
       return res.status(403).send("State mismatch. Possible CSRF attack.");
     }
 
+    // Node.js server performs the token exchange with Apple
     const tokenResponse = await appleAuth.accessToken(code);
 
-    console.log("\n--- Apple Token Response ---");
+    console.log("\n--- Apple Token Response (from Node.js to Apple) ---");
     console.log(tokenResponse);
 
     if (tokenResponse.id_token) {
       try {
+        // Decode the ID token to extract user information
         const decodedIdToken = jwt.decode(tokenResponse.id_token);
         console.log("\n--- Decoded ID Token Payload ---");
         console.log(decodedIdToken);
 
-        userAppleId = decodedIdToken.sub;
+        userAppleId = decodedIdToken.sub; // Apple's unique user identifier
         userEmail = decodedIdToken.email || null;
 
         // Check if it's a private relay email
@@ -192,6 +196,7 @@ app.post("https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callba
         }
 
         // Parse user object if provided (only on first sign-in)
+        // 'user' object from Apple's form_post contains name if scope 'name' was requested
         if (user && typeof user === "string") {
           try {
             const parsedUser = JSON.parse(user);
@@ -201,11 +206,11 @@ app.post("https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callba
               userName = `${firstName} ${lastName}`.trim() || null;
             }
           } catch (parseError) {
-            console.warn("Could not parse user string:", parseError);
+            console.warn("Could not parse user string from Apple callback:", parseError);
           }
         }
 
-        // --- FORWARD USER DATA TO C# BACKEND ---
+        // --- FORWARD VERIFIED USER DATA TO C# BACKEND ---
         const userDataToForward = {
           appleId: userAppleId,
           email: userEmail,
@@ -213,15 +218,15 @@ app.post("https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callba
           isPrivateEmail: isPrivateEmail,
           refreshToken: tokenResponse.refresh_token,
           accessToken: tokenResponse.access_token,
-          // You might also forward the id_token itself if your C# backend wants to verify it
-          idToken: tokenResponse.id_token
+          // You might also forward the id_token itself if your C# backend wants to re-verify it
+          // idToken: tokenResponse.id_token
         };
 
         try {
-          console.log(`Attempting to send user data to C# backend at ${CSHARP_BACKEND_API_URL}`);
+          console.log(`Attempting to send verified user data to C# backend at ${CSHARP_BACKEND_API_URL}`);
           const csharpResponse = await axios.post(CSHARP_BACKEND_API_URL, userDataToForward);
           csharpBackendResponse = csharpResponse.data; // Store response from C# backend
-          console.log("✅ C# Backend Response:", csharpBackendResponse);
+          console.log("✅ C# Backend Response (from Node.js to C#):", csharpBackendResponse);
         } catch (csharpError) {
           console.error("❌ Error sending data to C# backend:", csharpError.response ? csharpError.response.data : csharpError.message);
           // Decide how to handle this error:
