@@ -5,7 +5,7 @@ const fs = require("fs");
 const AppleAuth = require("./apple-auth");
 const jwt = require("jsonwebtoken");
 const qs = require("querystring");
-const axios = require('axios'); // Import axios for making HTTP requests to C# backend
+const axios = require("axios"); // Import axios for making HTTP requests to C# backend
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -16,7 +16,9 @@ app.use(express.json());
 const config = {
   client_id: process.env.APPLE_CLIENT_ID || "com.mghebro.si",
   team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ",
-  redirect_uri: process.env.APPLE_REDIRECT_URI || "https://mghebro-auth-test.netlify.app/auth/apple-callback",
+  redirect_uri:
+    process.env.APPLE_REDIRECT_URI ||
+    "https://mghebro-auth-test.netlify.app/auth/apple-callback",
   key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT",
   scope: "name email",
 };
@@ -29,14 +31,14 @@ if (process.env.APPLE_PRIVATE_KEY) {
   let rawKey = process.env.APPLE_PRIVATE_KEY;
 
   // Try multiple methods to get the correct private key format
-  if (rawKey.includes('\\n')) {
+  if (rawKey.includes("\\n")) {
     // Method 1: Replace escaped newlines
-    privateKeyContent = rawKey.replace(/\\n/g, '\n');
+    privateKeyContent = rawKey.replace(/\\n/g, "\n");
     console.log("🔧 Method 1: Converted \\n to newlines");
-  } else if (!rawKey.includes('\n') && rawKey.length > 200) {
+  } else if (!rawKey.includes("\n") && rawKey.length > 200) {
     // Method 2: Assume it's base64 encoded
     try {
-      privateKeyContent = Buffer.from(rawKey, 'base64').toString('utf8');
+      privateKeyContent = Buffer.from(rawKey, "base64").toString("utf8");
       console.log("🔧 Method 2: Decoded from base64");
     } catch (err) {
       console.log("🔧 Method 2 failed, trying method 3");
@@ -55,7 +57,10 @@ if (process.env.APPLE_PRIVATE_KEY) {
   console.log("Original length:", rawKey.length);
   console.log("Processed length:", privateKeyContent.length);
   console.log("Starts with:", privateKeyContent.substring(0, 30));
-  console.log("Ends with:", privateKeyContent.substring(privateKeyContent.length - 30));
+  console.log(
+    "Ends with:",
+    privateKeyContent.substring(privateKeyContent.length - 30)
+  );
   console.log("Contains BEGIN:", privateKeyContent.includes("-----BEGIN"));
   console.log("Contains END:", privateKeyContent.includes("-----END"));
   console.log("Newline count:", (privateKeyContent.match(/\n/g) || []).length);
@@ -67,9 +72,13 @@ if (process.env.APPLE_PRIVATE_KEY) {
   console.log("🔍 Looking for private key at:", privateKeyLocation);
 
   if (!fs.existsSync(privateKeyLocation)) {
-    console.error(`❌ Error: Private key file not found at ${privateKeyLocation}`);
+    console.error(
+      `❌ Error: Private key file not found at ${privateKeyLocation}`
+    );
     console.error("💡 Tip: Set APPLE_PRIVATE_KEY environment variable instead");
-    throw new Error("Apple private key not found in environment variable or file");
+    throw new Error(
+      "Apple private key not found in environment variable or file"
+    );
   }
 
   privateKeyContent = privateKeyLocation;
@@ -78,19 +87,17 @@ if (process.env.APPLE_PRIVATE_KEY) {
 }
 
 // Initialize AppleAuth
-const appleAuth = new AppleAuth(
-    config,
-    privateKeyContent,
-    privateKeyMethod,
-    { debug: true }
-);
+const appleAuth = new AppleAuth(config, privateKeyContent, privateKeyMethod, {
+  debug: true,
+});
 
 console.log("🍎 Apple Auth initialized successfully");
 
 // --- C# Backend API Endpoint ---
 // IMPORTANT: This is the URL where your C# backend will be listening for the forwarded data.
 // Make sure this matches your C# controller's route.
-const CSHARP_BACKEND_API_URL = "https://ad9f48819e60.ngrok-free.app/api/AppleService/auth/apple-callback"; // Corrected example URL
+const CSHARP_BACKEND_API_URL =
+  "https://ad9f48819e60.ngrok-free.app/api/AppleService/auth/apple-callback"; // Corrected example URL
 // --- End C# Backend API Endpoint ---
 
 // Routes
@@ -165,38 +172,36 @@ app.post("/auth/apple/callback", async (req, res) => {
 
     console.log("--- Apple Callback Received ---");
     console.log("Code:", code);
-    console.log("ID Token (raw):", id_token); // This is the raw ID token from Apple's form_post
     console.log("State:", state);
-    console.log("User (initial data from Apple, if provided):", user);
+    console.log("User data:", user);
 
+    // Verify CSRF protection
     if (state !== appleAuth.state) {
       console.error("CSRF Attack Detected: State mismatch!");
       return res.status(403).send("State mismatch. Possible CSRF attack.");
     }
 
-    // Node.js server performs the token exchange with Apple
+    // Exchange authorization code for tokens
     const tokenResponse = await appleAuth.accessToken(code);
-
-    console.log("\n--- Apple Token Response (from Node.js to Apple) ---");
+    console.log("\n--- Apple Token Response ---");
     console.log(tokenResponse);
 
     if (tokenResponse.id_token) {
       try {
-        // Decode the ID token to extract user information
+        // Decode the ID token
         const decodedIdToken = jwt.decode(tokenResponse.id_token);
-        console.log("\n--- Decoded ID Token Payload ---");
+        console.log("\n--- Decoded ID Token ---");
         console.log(decodedIdToken);
 
-        userAppleId = decodedIdToken.sub; // Apple's unique user identifier
+        userAppleId = decodedIdToken.sub;
         userEmail = decodedIdToken.email || null;
 
-        // Check if it's a private relay email
+        // Check for private relay email
         if (userEmail && userEmail.includes('@privaterelay.appleid.com')) {
           isPrivateEmail = true;
         }
 
-        // Parse user object if provided (only on first sign-in)
-        // 'user' object from Apple's form_post contains name if scope 'name' was requested
+        // Parse user data (only provided on first sign-in)
         if (user && typeof user === "string") {
           try {
             const parsedUser = JSON.parse(user);
@@ -206,131 +211,119 @@ app.post("/auth/apple/callback", async (req, res) => {
               userName = `${firstName} ${lastName}`.trim() || null;
             }
           } catch (parseError) {
-            console.warn("Could not parse user string from Apple callback:", parseError);
+            console.warn("Could not parse user data:", parseError);
           }
         }
 
-        // --- FORWARD VERIFIED USER DATA TO C# BACKEND ---
-        const userDataToForward = {
+        // Prepare data for C# backend
+        const authRequest = {
+          code: code,
+          redirectUri: config.redirect_uri,
           appleId: userAppleId,
           email: userEmail,
           name: userName,
           isPrivateEmail: isPrivateEmail,
           refreshToken: tokenResponse.refresh_token,
-          accessToken: tokenResponse.access_token,
-          // You might also forward the id_token itself if your C# backend wants to re-verify it
-          // idToken: tokenResponse.id_token
+          accessToken: tokenResponse.access_token
         };
 
         try {
-          console.log(`Attempting to send verified user data to C# backend at ${CSHARP_BACKEND_API_URL}`);
-          const csharpResponse = await axios.post(CSHARP_BACKEND_API_URL, userDataToForward);
-          csharpBackendResponse = csharpResponse.data; // Store response from C# backend
-          console.log("✅ C# Backend Response (from Node.js to C#):", csharpBackendResponse);
+          console.log(`Sending auth data to C# backend at ${CSHARP_BACKEND_API_URL}`);
+          console.log("Auth request data:", authRequest);
+          
+          const csharpResponse = await axios.post(CSHARP_BACKEND_API_URL, authRequest, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          });
+          
+          csharpBackendResponse = csharpResponse.data;
+          console.log("✅ C# Backend Response:", csharpBackendResponse);
+
+          // If C# backend returns success with JWT token, redirect to frontend
+          if (csharpBackendResponse.status === 200 && csharpBackendResponse.data) {
+            const frontendUrl = process.env.FRONTEND_URL || 'https://mghebro-auth-test.netlify.app';
+            const successUrl = `${frontendUrl}/auth/success?token=${csharpBackendResponse.data.accessToken}&email=${encodeURIComponent(csharpBackendResponse.data.email || '')}`;
+            return res.redirect(successUrl);
+          }
+          
         } catch (csharpError) {
           console.error("❌ Error sending data to C# backend:", csharpError.response ? csharpError.response.data : csharpError.message);
-          // Decide how to handle this error:
-          // 1. Fail the entire authentication flow.
-          // 2. Proceed but indicate that user data might not be saved.
-          // For now, we'll proceed but log the error.
+          // Return error page
+          return res.status(500).send(generateErrorHTML("Failed to complete authentication", csharpError.message));
         }
-        // --- END FORWARDING ---
 
       } catch (jwtError) {
         console.error("Error decoding ID token:", jwtError);
+        return res.status(500).send(generateErrorHTML("Token decode error", jwtError.message));
       }
     }
 
-    // Prepare display values for the HTML response
-    const displayEmail = userEmail || "Not provided";
-    const displayName = userName || "Not provided (only available on first sign-in)";
-    const emailType = isPrivateEmail ? " (Private Relay)" : "";
+    // Success page (fallback if not redirecting)
+    res.send(generateSuccessHTML(tokenResponse, userAppleId, userEmail, userName, isPrivateEmail, csharpBackendResponse));
 
-    res.send(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Apple Auth Success</title>
-                <script src="https://cdn.tailwindcss.com"></script>
-                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-                <style>
-                    body {
-                        font-family: 'Inter', sans-serif;
-                        background-color: #f0f2f5;
-                    }
-                </style>
-            </head>
-            <body class="flex items-center justify-center min-h-screen">
-                <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
-                    <h1 class="text-3xl font-bold text-green-600 mb-4">Authentication Successful!</h1>
-                    <p class="text-gray-700 mb-6">
-                        You have successfully signed in with Apple.
-                        ${userName ? `Welcome, ${userName}!` : 'Welcome back!'}
-                    </p>
-                    <div class="bg-gray-100 p-4 rounded-md text-left mb-6">
-                        <h3 class="font-semibold text-lg mb-2">Token Response Summary:</h3>
-                        <pre class="whitespace-pre-wrap break-words text-sm">Access Token: ${tokenResponse.access_token ? tokenResponse.access_token.substring(0, 20) + "..." : "Not received"}
-ID Token: ${tokenResponse.id_token ? tokenResponse.id_token.substring(0, 20) + "..." : "Not received"}
-Expires In: ${tokenResponse.expires_in} seconds
-Token Type: ${tokenResponse.token_type}</pre>
-                    </div>
-                    <div class="bg-blue-50 p-4 rounded-md text-left mb-6 border border-blue-200">
-                        <h3 class="font-semibold text-lg mb-2 text-blue-800">User Information:</h3>
-                        <div class="text-sm text-blue-700">
-                            <p class="mb-2"><strong>Apple ID:</strong> ${userAppleId || "Not available"}</p>
-                            <p class="mb-2"><strong>Email:</strong> ${displayEmail}${emailType}</p>
-                            <p class="mb-2"><strong>Name:</strong> ${displayName}</p>
-                            <p class="text-xs text-gray-600 mt-3">Note: Apple only provides the user's name on the first authentication.</p>
-                        </div>
-                    </div>
-                    ${csharpBackendResponse ? `
-                    <div class="bg-purple-50 p-4 rounded-md text-left mb-6 border border-purple-200">
-                        <h3 class="font-semibold text-lg mb-2 text-purple-800">C# Backend Status:</h3>
-                        <pre class="whitespace-pre-wrap break-words text-sm">${JSON.stringify(csharpBackendResponse, null, 2)}</pre>
-                    </div>
-                    ` : ''}
-                    <a href="/" class="inline-block bg-blue-600 text-white py-2 px-5 rounded-full text-md font-semibold hover:bg-blue-700 transition duration-300 shadow-md">
-                        Go back to Home
-                    </a>
-                </div>
-            </body>
-            </html>
-        `);
   } catch (error) {
     console.error("Error during Apple authentication callback:", error);
-    res.status(500).send(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Apple Auth Error</title>
-                <script src="https://cdn.tailwindcss.com"></script>
-                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-                <style>
-                    body {
-                        font-family: 'Inter', sans-serif;
-                        background-color: #f0f2f5;
-                    }
-                </style>
-            </head>
-            <body class="flex items-center justify-center min-h-screen">
-                <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
-                    <h1 class="text-3xl font-bold text-red-600 mb-4">Authentication Error</h1>
-                    <p class="text-gray-700 mb-6">
-                        An error occurred during Apple authentication. Please check the server logs for details.
-                    </p>
-                    <p class="text-red-500 text-sm mb-6">${error.message || error}</p>
-                    <a href="/" class="inline-block bg-blue-600 text-white py-2 px-5 rounded-full text-md font-semibold hover:bg-blue-700 transition duration-300 shadow-md">
-                        Try Again
-                    </a>
-                </div>
-            </body>
-            </html>
-        `);
+    res.status(500).send(generateErrorHTML("Authentication error", error.message));
   }
 });
+
+// Helper functions for generating HTML responses
+function generateSuccessHTML(tokenResponse, userAppleId, userEmail, userName, isPrivateEmail, csharpResponse) {
+  const displayEmail = userEmail || "Not provided";
+  const displayName = userName || "Not provided (only available on first sign-in)";
+  const emailType = isPrivateEmail ? " (Private Relay)" : "";
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Apple Auth Success</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="flex items-center justify-center min-h-screen bg-gray-100">
+        <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+            <h1 class="text-3xl font-bold text-green-600 mb-4">Authentication Successful!</h1>
+            <div class="bg-blue-50 p-4 rounded-md text-left mb-6">
+                <p><strong>Apple ID:</strong> ${userAppleId || "Not available"}</p>
+                <p><strong>Email:</strong> ${displayEmail}${emailType}</p>
+                <p><strong>Name:</strong> ${displayName}</p>
+            </div>
+            ${csharpResponse ? `
+            <div class="bg-purple-50 p-4 rounded-md text-left mb-6">
+                <h3 class="font-semibold">Backend Response:</h3>
+                <pre class="text-sm">${JSON.stringify(csharpResponse, null, 2)}</pre>
+            </div>
+            ` : ''}
+            <a href="/" class="bg-blue-600 text-white py-2 px-4 rounded">Home</a>
+        </div>
+    </body>
+    </html>
+  `;
+}
+
+function generateErrorHTML(title, message) {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Authentication Error</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="flex items-center justify-center min-h-screen bg-gray-100">
+        <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+            <h1 class="text-3xl font-bold text-red-600 mb-4">${title}</h1>
+            <p class="text-gray-700 mb-6">${message}</p>
+            <a href="/" class="bg-blue-600 text-white py-2 px-4 rounded">Try Again</a>
+        </div>
+    </body>
+    </html>
+  `;
+}
 
 module.exports = app;

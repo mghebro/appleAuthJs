@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Success</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+        <div class="text-center mb-6">
+            <svg class="w-16 h-16 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">Authentication Successful!</h1>
+            <p class="text-gray-600">You have successfully signed in with Apple</p>
+        </div>
+        
+        <div id="user-info" class="bg-gray-50 p-4 rounded-md mb-6">
+            <p class="text-sm text-gray-600 mb-2">Logged in as:</p>
+            <p id="user-email" class="font-medium text-gray-800"></p>
+        </div>
+        
+        <div class="text-center">
+            <p class="text-sm text-gray-600 mb-4">Redirecting to dashboard...</p>
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const email = urlParams.get('email');
+        
+        // Display user email
+        if (email) {
+            document.getElementById('user-email').textContent = decodeURIComponent(email);
+        }
+        
+        // Store token in localStorage or sessionStorage
+        if (token) {
+            localStorage.setItem('authToken', token);
+            
+            // Redirect to your app's dashboard after 2 seconds
+            setTimeout(() => {
+                window.location.href = '/dashboard'; // Change to your app's dashboard URL
+            }, 2000);
+        } else {
+            // Handle error - no token received
+            document.getElementById('user-info').innerHTML = `
+                <p class="text-red-600">Authentication failed. Please try again.</p>
+            `;
+            setTimeout(() => {
+                window.location.href = '/login'; // Redirect to login page
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
