@@ -168,9 +168,10 @@ app.post("/auth/apple/callback", async (req, res) => {
     console.log(tokenResponse);
 
     let decodedIdToken = null;
-    let userEmail = "N/A";
-    let userName = "N/A";
-    let userAppleId = "N/A";
+    let userEmail = null;
+    let userName = null;
+    let userAppleId = null;
+    let isPrivateEmail = false;
 
     if (tokenResponse.id_token) {
       try {
@@ -179,14 +180,22 @@ app.post("/auth/apple/callback", async (req, res) => {
         console.log(decodedIdToken);
 
         userAppleId = decodedIdToken.sub;
-        userEmail = decodedIdToken.email || "N/A";
+        userEmail = decodedIdToken.email || null;
         
+        // Check if it's a private relay email
+        if (userEmail && userEmail.includes('@privaterelay.appleid.com')) {
+          isPrivateEmail = true;
+        }
+        
+        // Parse user object if provided (only on first sign-in)
         if (user && typeof user === "string") {
           try {
             const parsedUser = JSON.parse(user);
-            userName = parsedUser.name
-              ? `${parsedUser.name.firstName || ""} ${parsedUser.name.lastName || ""}`.trim()
-              : "N/A";
+            if (parsedUser.name) {
+              const firstName = parsedUser.name.firstName || "";
+              const lastName = parsedUser.name.lastName || "";
+              userName = `${firstName} ${lastName}`.trim() || null;
+            }
           } catch (parseError) {
             console.warn("Could not parse user string:", parseError);
           }
@@ -198,16 +207,24 @@ app.post("/auth/apple/callback", async (req, res) => {
             users[userAppleId].lastLogin = new Date();
             users[userAppleId].refreshToken = tokenResponse.refresh_token;
             users[userAppleId].accessToken = tokenResponse.access_token;
-            if (userName !== "N/A" && !users[userAppleId].name)
+            
+            // Only update name if we have a new value and don't have one stored
+            if (userName && !users[userAppleId].name) {
               users[userAppleId].name = userName;
-            if (userEmail !== "N/A" && !users[userAppleId].email)
+            }
+            
+            // Update email if provided
+            if (userEmail && !users[userAppleId].email) {
               users[userAppleId].email = userEmail;
+              users[userAppleId].isPrivateEmail = isPrivateEmail;
+            }
           } else {
             console.log(`\nNew user ${userAppleId}. Creating record.`);
             users[userAppleId] = {
               appleId: userAppleId,
               email: userEmail,
               name: userName,
+              isPrivateEmail: isPrivateEmail,
               refreshToken: tokenResponse.refresh_token,
               accessToken: tokenResponse.access_token,
               createdAt: new Date(),
@@ -220,6 +237,11 @@ app.post("/auth/apple/callback", async (req, res) => {
         console.error("Error decoding ID token:", jwtError);
       }
     }
+
+    // Prepare display values
+    const displayEmail = userEmail || "Not provided";
+    const displayName = userName || "Not provided (only available on first sign-in)";
+    const emailType = isPrivateEmail ? " (Private Relay)" : "";
 
     res.send(`
             <!DOCTYPE html>
@@ -242,24 +264,24 @@ app.post("/auth/apple/callback", async (req, res) => {
                     <h1 class="text-3xl font-bold text-green-600 mb-4">Authentication Successful!</h1>
                     <p class="text-gray-700 mb-6">
                         You have successfully signed in with Apple.
-                        Check your server console for the full token response and user data.
+                        ${userName ? `Welcome, ${userName}!` : 'Welcome back!'}
                     </p>
                     <div class="bg-gray-100 p-4 rounded-md text-left mb-6">
                         <h3 class="font-semibold text-lg mb-2">Token Response Summary:</h3>
-                        <pre class="whitespace-pre-wrap break-words text-sm">
-                            Access Token: ${tokenResponse.access_token ? tokenResponse.access_token.substring(0, 20) + "..." : "N/A"}
-                            ID Token: ${tokenResponse.id_token ? tokenResponse.id_token.substring(0, 20) + "..." : "N/A"}
-                            Expires In: ${tokenResponse.expires_in} seconds
-                            Token Type: ${tokenResponse.token_type}
-                        </pre>
+                        <pre class="whitespace-pre-wrap break-words text-sm">Access Token: ${tokenResponse.access_token ? tokenResponse.access_token.substring(0, 20) + "..." : "Not received"}
+ID Token: ${tokenResponse.id_token ? tokenResponse.id_token.substring(0, 20) + "..." : "Not received"}
+Expires In: ${tokenResponse.expires_in} seconds
+Token Type: ${tokenResponse.token_type}</pre>
                     </div>
                     <div class="bg-blue-50 p-4 rounded-md text-left mb-6 border border-blue-200">
-                        <h3 class="font-semibold text-lg mb-2 text-blue-800">Decoded User Information:</h3>
-                        <pre class="whitespace-pre-wrap break-words text-sm text-blue-700">
-                            Apple ID (sub): ${userAppleId}
-                            Email: ${userEmail}
-                            Name: ${userName}
-                        </pre>
+                        <h3 class="font-semibold text-lg mb-2 text-blue-800">User Information:</h3>
+                        <div class="text-sm text-blue-700">
+                            <p class="mb-2"><strong>Apple ID:</strong> ${userAppleId || "Not available"}</p>
+                            <p class="mb-2"><strong>Email:</strong> ${displayEmail}${emailType}</p>
+                            <p class="mb-2"><strong>Name:</strong> ${displayName}</p>
+                            ${!userName && users[userAppleId]?.name ? `<p class="mb-2 text-xs text-gray-600">Previously stored name: ${users[userAppleId].name}</p>` : ''}
+                            <p class="text-xs text-gray-600 mt-3">Note: Apple only provides the user's name on the first authentication.</p>
+                        </div>
                     </div>
                     <a href="/" class="inline-block bg-blue-600 text-white py-2 px-5 rounded-full text-md font-semibold hover:bg-blue-700 transition duration-300 shadow-md">
                         Go back to Home
