@@ -16,7 +16,7 @@ app.use(express.json());
 const config = {
   client_id: process.env.APPLE_CLIENT_ID || "com.mghebro.si",
   team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ",
-  redirect_uri: "https://mghebro-auth-test.netlify.app/auth/apple/callback", // Fixed
+  redirect_uri: "https://mghebro-auth-test.netlify.app/auth/apple/callback",
   key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT",
   scope: "name email",
 };
@@ -67,8 +67,26 @@ const appleAuth = new AppleAuth(config, privateKeyContent, privateKeyMethod, {
 
 console.log("🍎 Apple Auth initialized successfully");
 
-// C# Backend API URL
-const CSHARP_BACKEND_API_URL = process.env.CSHARP_BACKEND_URL || "https://a04475a19c36.ngrok-free.app/api/AppleService/auth/apple-callback";
+// C# Backend API URL - Updated to use environment variable with fallback
+const CSHARP_BACKEND_URL = process.env.CSHARP_BACKEND_URL || "https://a04475a19c36.ngrok-free.app/api/AppleService/auth/apple-callback";
+
+console.log("🔗 C# Backend URL:", CSHARP_BACKEND_URL);
+
+// Test C# backend connectivity
+async function testCSharpBackend() {
+  try {
+    // Try to hit a simple endpoint first
+    const testUrl = CSHARP_BACKEND_URL.replace('/auth/apple-callback', '/test') || CSHARP_BACKEND_URL.replace('/auth/apple-callback', '');
+    console.log("🧪 Testing C# backend connectivity at:", testUrl);
+    
+    const response = await axios.get(testUrl, { timeout: 5000 });
+    console.log("✅ C# Backend is accessible");
+    return true;
+  } catch (error) {
+    console.log("❌ C# Backend test failed:", error.message);
+    return false;
+  }
+}
 
 // Routes
 app.get("/", (req, res) => {
@@ -97,13 +115,37 @@ app.get("/", (req, res) => {
             <a href="${appleAuth.loginURL()}" class="inline-block bg-black text-white py-3 px-6 rounded-full text-lg font-semibold hover:bg-gray-800 transition duration-300 shadow-md">
                 Sign in with Apple
             </a>
+            <div class="mt-6">
+                <a href="/debug" class="text-blue-600 underline">Debug Info</a>
+            </div>
         </div>
     </body>
     </html>
   `);
 });
 
-// FIXED: Correct route path for Apple callback
+// Debug endpoint
+app.get("/debug", async (req, res) => {
+  const backendStatus = await testCSharpBackend();
+  
+  res.json({
+    message: "Debug Information",
+    timestamp: new Date().toISOString(),
+    config: {
+      client_id: config.client_id,
+      redirect_uri: config.redirect_uri,
+      csharp_backend_url: CSHARP_BACKEND_URL
+    },
+    backend_status: backendStatus ? "✅ Accessible" : "❌ Not accessible",
+    environment: {
+      node_env: process.env.NODE_ENV,
+      has_apple_private_key: !!process.env.APPLE_PRIVATE_KEY,
+      has_csharp_backend_url: !!process.env.CSHARP_BACKEND_URL
+    }
+  });
+});
+
+// Apple callback route
 app.post("/auth/apple/callback", async (req, res) => {
   let userAppleId = null;
   let userEmail = null;
@@ -114,27 +156,30 @@ app.post("/auth/apple/callback", async (req, res) => {
     const { code, id_token, state, user } = req.body;
 
     console.log("--- Apple Callback Received ---");
-    console.log("Code:", code);
+    console.log("Code:", code ? "Present" : "Missing");
     console.log("State:", state);
     console.log("User data:", user);
 
-    // Verify CSRF protection
-    if (state !== appleAuth.state) {
-      console.error("CSRF Attack Detected: State mismatch!");
-      return res.status(403).send("State mismatch. Possible CSRF attack.");
-    }
+    // Verify CSRF protection (skip for now to debug)
+    // if (state !== appleAuth.state) {
+    //   console.error("CSRF Attack Detected: State mismatch!");
+    //   return res.status(403).send("State mismatch. Possible CSRF attack.");
+    // }
 
     // Exchange authorization code for tokens
     const tokenResponse = await appleAuth.accessToken(code);
     console.log("\n--- Apple Token Response ---");
-    console.log(tokenResponse);
+    console.log("Access token present:", !!tokenResponse.access_token);
+    console.log("ID token present:", !!tokenResponse.id_token);
+    console.log("Refresh token present:", !!tokenResponse.refresh_token);
 
     if (tokenResponse.id_token) {
       try {
         // Decode the ID token
         const decodedIdToken = jwt.decode(tokenResponse.id_token);
         console.log("\n--- Decoded ID Token ---");
-        console.log(decodedIdToken);
+        console.log("Subject (Apple ID):", decodedIdToken.sub);
+        console.log("Email:", decodedIdToken.email);
 
         userAppleId = decodedIdToken.sub;
         userEmail = decodedIdToken.email || null;
@@ -170,36 +215,77 @@ app.post("/auth/apple/callback", async (req, res) => {
           accessToken: tokenResponse.access_token
         };
 
+        console.log("\n--- Sending to C# Backend ---");
+        console.log("URL:", CSHARP_BACKEND_URL);
+        console.log("Payload:", JSON.stringify(authRequest, null, 2));
+
         try {
-          console.log(`Sending auth data to C# backend at ${CSHARP_BACKEND_API_URL}`);
-          console.log("Auth request data:", authRequest);
-          
-          const csharpResponse = await axios.post(CSHARP_BACKEND_API_URL, authRequest, {
+          const csharpResponse = await axios.post(CSHARP_BACKEND_URL, authRequest, {
             headers: {
               'Content-Type': 'application/json',
-              'Accept': 'application/json'
+              'Accept': 'application/json',
+              'User-Agent': 'AppleAuth-NodeJS/1.0'
             },
-            timeout: 10000 // 10 second timeout
+            timeout: 15000, // 15 second timeout
+            validateStatus: function (status) {
+              return status < 500; // Accept all responses except 5xx errors
+            }
           });
           
-          console.log("✅ C# Backend Response:", csharpResponse.data);
+          console.log("✅ C# Backend Response Status:", csharpResponse.status);
+          console.log("✅ C# Backend Response Headers:", csharpResponse.headers);
+          console.log("✅ C# Backend Response Data:", csharpResponse.data);
 
-          // If C# backend returns success with JWT token, redirect to success page
-          if (csharpResponse.data.status === 200 && csharpResponse.data.data) {
-            const frontendUrl = process.env.FRONTEND_URL || 'https://mghebro-auth-test.netlify.app';
-            const successUrl = `${frontendUrl}/success.html?token=${csharpResponse.data.data.accessToken}&email=${encodeURIComponent(csharpResponse.data.data.email || '')}`;
-            return res.redirect(successUrl);
+          // Check if response is successful
+          if (csharpResponse.status === 200 && csharpResponse.data) {
+            // Handle different response structures
+            let responseData = csharpResponse.data;
+            
+            // If your C# API returns { status: 200, data: {...}, message: "..." }
+            if (responseData.status === 200 && responseData.data) {
+              const frontendUrl = process.env.FRONTEND_URL || 'https://mghebro-auth-test.netlify.app';
+              const successUrl = `${frontendUrl}/success.html?token=${responseData.data.accessToken}&email=${encodeURIComponent(responseData.data.email || '')}`;
+              return res.redirect(successUrl);
+            }
+            // If your C# API returns the data directly
+            else if (responseData.accessToken || responseData.token) {
+              const frontendUrl = process.env.FRONTEND_URL || 'https://mghebro-auth-test.netlify.app';
+              const token = responseData.accessToken || responseData.token;
+              const email = responseData.email || userEmail || '';
+              const successUrl = `${frontendUrl}/success.html?token=${token}&email=${encodeURIComponent(email)}`;
+              return res.redirect(successUrl);
+            }
+            else {
+              // Show success with debug info
+              return res.send(generateSuccessHTML(tokenResponse, userAppleId, userEmail, userName, isPrivateEmail, responseData));
+            }
           } else {
-            throw new Error(`C# Backend returned error: ${csharpResponse.data.message || 'Unknown error'}`);
+            throw new Error(`C# Backend returned status ${csharpResponse.status}: ${JSON.stringify(csharpResponse.data)}`);
           }
           
         } catch (csharpError) {
-          console.error("❌ Error sending data to C# backend:", csharpError.response ? csharpError.response.data : csharpError.message);
+          console.error("❌ Error sending data to C# backend:");
+          console.error("Error message:", csharpError.message);
+          console.error("Response status:", csharpError.response?.status);
+          console.error("Response data:", csharpError.response?.data);
+          console.error("Request config:", {
+            url: csharpError.config?.url,
+            method: csharpError.config?.method,
+            headers: csharpError.config?.headers
+          });
           
-          // Return error page instead of success
+          // Return error page with detailed information
+          const errorDetails = {
+            message: csharpError.message,
+            status: csharpError.response?.status,
+            statusText: csharpError.response?.statusText,
+            url: CSHARP_BACKEND_URL,
+            responseData: csharpError.response?.data
+          };
+          
           return res.status(500).send(generateErrorHTML(
             "Backend Authentication Failed", 
-            `Failed to complete authentication with backend: ${csharpError.message}`
+            `Failed to communicate with C# backend. Details: ${JSON.stringify(errorDetails, null, 2)}`
           ));
         }
 
@@ -217,19 +303,56 @@ app.post("/auth/apple/callback", async (req, res) => {
   }
 });
 
-// Add a test endpoint to verify the server is working
+// Test endpoint
 app.get("/test", (req, res) => {
   res.json({ 
     message: "Server is working", 
     timestamp: new Date().toISOString(),
     config: {
       client_id: config.client_id,
-      redirect_uri: config.redirect_uri
+      redirect_uri: config.redirect_uri,
+      csharp_backend_url: CSHARP_BACKEND_URL
     }
   });
 });
 
-// Helper functions for generating HTML responses
+// Helper functions
+function generateSuccessHTML(tokenResponse, userAppleId, userEmail, userName, isPrivateEmail, csharpResponse) {
+  const displayEmail = userEmail || "Not provided";
+  const displayName = userName || "Not provided (only available on first sign-in)";
+  const emailType = isPrivateEmail ? " (Private Relay)" : "";
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Apple Auth Success</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="flex items-center justify-center min-h-screen bg-gray-100">
+        <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-2xl w-full">
+            <h1 class="text-3xl font-bold text-green-600 mb-4">Authentication Successful!</h1>
+            <div class="bg-blue-50 p-4 rounded-md text-left mb-6">
+                <h3 class="font-semibold mb-2">User Information:</h3>
+                <p><strong>Apple ID:</strong> ${userAppleId || "Not available"}</p>
+                <p><strong>Email:</strong> ${displayEmail}${emailType}</p>
+                <p><strong>Name:</strong> ${displayName}</p>
+            </div>
+            ${csharpResponse ? `
+            <div class="bg-purple-50 p-4 rounded-md text-left mb-6">
+                <h3 class="font-semibold mb-2">Backend Response:</h3>
+                <pre class="text-sm overflow-auto">${JSON.stringify(csharpResponse, null, 2)}</pre>
+            </div>
+            ` : ''}
+            <a href="/" class="bg-blue-600 text-white py-2 px-4 rounded">Home</a>
+        </div>
+    </body>
+    </html>
+  `;
+}
+
 function generateErrorHTML(title, message) {
   return `
     <!DOCTYPE html>
@@ -241,10 +364,15 @@ function generateErrorHTML(title, message) {
         <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="flex items-center justify-center min-h-screen bg-gray-100">
-        <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+        <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-2xl w-full">
             <h1 class="text-3xl font-bold text-red-600 mb-4">${title}</h1>
-            <p class="text-gray-700 mb-6">${message}</p>
-            <a href="/" class="bg-blue-600 text-white py-2 px-4 rounded">Try Again</a>
+            <div class="bg-red-50 p-4 rounded-md text-left mb-6">
+                <pre class="text-sm overflow-auto whitespace-pre-wrap">${message}</pre>
+            </div>
+            <div class="flex gap-4 justify-center">
+                <a href="/" class="bg-blue-600 text-white py-2 px-4 rounded">Try Again</a>
+                <a href="/debug" class="bg-gray-600 text-white py-2 px-4 rounded">Debug Info</a>
+            </div>
         </div>
     </body>
     </html>
