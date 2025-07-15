@@ -160,7 +160,7 @@ app.get("/", (req, res) => {
 });
 
 // CORRECTED ROUTE DEFINITION: This route handles the callback from Apple
-app.post(CSHARP_BACKEND_API_URL, async (req, res) => {
+app.post("https://5024c2ceda71.ngrok-free.app/api/AppleService/auth/apple-callback", async (req, res) => {
   let userAppleId = null;
   let userEmail = null;
   let userName = null;
