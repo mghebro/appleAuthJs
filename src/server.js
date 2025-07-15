@@ -89,7 +89,7 @@ console.log("🍎 Apple Auth initialized successfully");
 
 // --- C# Backend API Endpoint ---
 // IMPORTANT: Replace with the actual URL of your C# backend API
-const CSHARP_BACKEND_API_URL = "https://4cf9ba56841b.ngrok-free.app/api/auth/apple-callback"; // Example URL
+const CSHARP_BACKEND_API_URL = "https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callback"; // Example URL
 // --- End C# Backend API Endpoint ---
 
 // Routes
@@ -151,7 +151,7 @@ app.get("/", (req, res) => {
     `);
 });
 
-app.post("https://4cf9ba56841b.ngrok-free.app/api/auth/apple-callback", async (req, res) => {
+app.post("https://4cf9ba56841b.ngrok-free.app/api/AppleService/auth/apple-callback", async (req, res) => {
   let userAppleId = null; // Declare outside try-catch for broader scope
   let userEmail = null;
   let userName = null;
