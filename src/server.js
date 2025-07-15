@@ -151,7 +151,7 @@ app.get("/", (req, res) => {
     `);
 });
 
-app.post("/auth/apple/callback", async (req, res) => {
+app.post("https://4cf9ba56841b.ngrok-free.app/auth/apple-callback", async (req, res) => {
   let userAppleId = null; // Declare outside try-catch for broader scope
   let userEmail = null;
   let userName = null;
