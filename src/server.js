@@ -97,7 +97,7 @@ console.log("🍎 Apple Auth initialized successfully");
 // IMPORTANT: This is the URL where your C# backend will be listening for the forwarded data.
 // Make sure this matches your C# controller's route.
 const CSHARP_BACKEND_API_URL =
-  "https://08002db842b6.ngrok-free.app/api/AppleService/auth/apple-callback"; // Corrected example URL
+  "https://2daf548e5cf8.ngrok-free.app/api/AppleService/auth/apple-callback"; // Corrected example URL
 // --- End C# Backend API Endpoint ---
 
 // Routes
