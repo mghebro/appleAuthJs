@@ -18,7 +18,7 @@ const config = {
   team_id: process.env.APPLE_TEAM_ID || "TTFPHSNRGQ",
   redirect_uri:
     process.env.APPLE_REDIRECT_URI ||
-    "https://mghebro-auth-test.netlify.app/auth/apple-callback",
+    "https://mghebro-auth-test.netlify.app/api/AppleService/auth/apple-callback",
   key_id: process.env.APPLE_KEY_ID || "ZR62KJ2BYT",
   scope: "name email",
 };
