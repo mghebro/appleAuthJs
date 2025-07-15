@@ -101,7 +101,7 @@ const CSHARP_BACKEND_API_URL =
 // --- End C# Backend API Endpoint ---
 
 // Routes
-app.get("/", (req, res) => {
+app.get("/api/AppleService", (req, res) => {
   res.send(`
         <!DOCTYPE html>
         <html lang="en">
