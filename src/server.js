@@ -101,7 +101,7 @@ const CSHARP_BACKEND_API_URL =
 // --- End C# Backend API Endpoint ---
 
 // Routes
-app.get("/api/AppleService", (req, res) => {
+app.get("/", (req, res) => {
   res.send(`
         <!DOCTYPE html>
         <html lang="en">
@@ -160,7 +160,7 @@ app.get("/api/AppleService", (req, res) => {
 });
 
 // CORRECTED ROUTE DEFINITION: This route handles the callback from Apple
-app.post(CSHARP_BACKEND_API_URL, async (req, res) => {
+app.post("auth/apple-callback", async (req, res) => {
   let userAppleId = null;
   let userEmail = null;
   let userName = null;
