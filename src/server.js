@@ -160,7 +160,7 @@ app.get("/", (req, res) => {
 });
 
 // CORRECTED ROUTE DEFINITION: This route handles the callback from Apple
-app.post("/auth/apple-callback", async (req, res) => {
+app.post("AppleService/auth/apple-callback", async (req, res) => {
   let userAppleId = null;
   let userEmail = null;
   let userName = null;
