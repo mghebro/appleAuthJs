@@ -68,22 +68,49 @@ const appleAuth = new AppleAuth(config, privateKeyContent, privateKeyMethod, {
 console.log("🍎 Apple Auth initialized successfully");
 
 // C# Backend API URL - Updated to use environment variable with fallback
-const CSHARP_BACKEND_URL = process.env.CSHARP_BACKEND_URL || "https://a04475a19c36.ngrok-free.app/api/AppleService/auth/apple-callback";
+const CSHARP_BACKEND_URL = process.env.CSHARP_BACKEND_URL || "https://98be9a6964b0.ngrok-free.app/api/AppleService/auth/apple-callback";
 
 console.log("🔗 C# Backend URL:", CSHARP_BACKEND_URL);
 
 // Test C# backend connectivity
 async function testCSharpBackend() {
   try {
-    // Try to hit a simple endpoint first
-    const testUrl = CSHARP_BACKEND_URL.replace('/auth/apple-callback', '/test') || CSHARP_BACKEND_URL.replace('/auth/apple-callback', '');
-    console.log("🧪 Testing C# backend connectivity at:", testUrl);
+    // Test 1: Try the test endpoint
+    console.log("🧪 Testing C# backend connectivity...");
+    console.log("🔗 Full backend URL:", CSHARP_BACKEND_URL);
     
-    const response = await axios.get(testUrl, { timeout: 5000 });
-    console.log("✅ C# Backend is accessible");
+    const baseUrl = CSHARP_BACKEND_URL.replace('/auth/apple-callback', '');
+    const testUrl = `${baseUrl}/test`;
+    
+    console.log("🧪 Testing C# backend test endpoint:", testUrl);
+    
+    const response = await axios.get(testUrl, { 
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'AppleAuth-Test/1.0'
+      }
+    });
+    console.log("✅ C# Backend test endpoint response:", response.status, response.data);
+    
+    // Test 2: Try the main endpoint with GET (should return 405 but confirms route exists)
+    try {
+      const getResponse = await axios.get(CSHARP_BACKEND_URL, { timeout: 5000 });
+      console.log("✅ C# Backend callback endpoint GET response:", getResponse.status);
+    } catch (error) {
+      if (error.response?.status === 405) {
+        console.log("✅ C# Backend callback endpoint exists (returns 405 for GET as expected)");
+        return true;
+      } else {
+        console.log("❓ C# Backend callback endpoint GET error:", error.response?.status, error.message);
+      }
+    }
+    
     return true;
   } catch (error) {
-    console.log("❌ C# Backend test failed:", error.message);
+    console.log("❌ C# Backend test failed:");
+    console.log("   Error:", error.message);
+    console.log("   Status:", error.response?.status);
+    console.log("   Data:", error.response?.data);
     return false;
   }
 }
