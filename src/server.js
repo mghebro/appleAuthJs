@@ -276,7 +276,7 @@ app.post("/auth/apple/callback", async (req, res) => {
             // If your C# API returns { status: 200, data: {...}, message: "..." }
             if (responseData.status === 200 && responseData.data) {
               const frontendUrl = process.env.FRONTEND_URL || 'https://mghebro-auth-test.netlify.app';
-              const successUrl = `${frontendUrl}/success.html?token=${responseData.data.accessToken}&email=${encodeURIComponent(responseData.data.email || '')}`;
+              const successUrl = `./success.html?token=${responseData.data.accessToken}&email=${encodeURIComponent(responseData.data.email || '')}`;
               return res.redirect(successUrl);
             }
             // If your C# API returns the data directly
