@@ -68,7 +68,7 @@ const appleAuth = new AppleAuth(config, privateKeyContent, privateKeyMethod, {
 console.log("🍎 Apple Auth initialized successfully");
 
 // C# Backend API URL - Updated to use environment variable with fallback
-const CSHARP_BACKEND_URL = process.env.CSHARP_BACKEND_URL || "https://98be9a6964b0.ngrok-free.app/api/AppleService/auth/apple-callback";
+const CSHARP_BACKEND_URL = process.env.CSHARP_BACKEND_URL || " https://98be9a6964b0.ngrok-free.app/api/AppleService/auth/apple-callback";
 
 console.log("🔗 C# Backend URL:", CSHARP_BACKEND_URL);
 
@@ -230,16 +230,21 @@ app.post("/auth/apple/callback", async (req, res) => {
           }
         }
 
-        // Prepare data for C# backend
+        // Prepare data for C# backend - Send processed data, not the raw code
         const authRequest = {
-          code: code,
-          redirectUri: config.redirect_uri,
+          // Don't send the code - it's already been used!
+          // code: code,  // ❌ Remove this line
           appleId: userAppleId,
           email: userEmail,
           name: userName,
           isPrivateEmail: isPrivateEmail,
           refreshToken: tokenResponse.refresh_token,
-          accessToken: tokenResponse.access_token
+          accessToken: tokenResponse.access_token,
+          // Add additional processed data
+          emailVerified: decodedIdToken.email_verified || false,
+          authTime: new Date(decodedIdToken.auth_time * 1000).toISOString(),
+          tokenType: tokenResponse.token_type,
+          expiresIn: tokenResponse.expires_in
         };
 
         console.log("\n--- Sending to C# Backend ---");
